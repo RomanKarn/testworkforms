@@ -9,6 +9,7 @@ services:
       - ./project:/var/www
       - composer_vendor:/var/www/vendor
       - js_node_modules:/var/www/node_modules
+
 volumes:
   composer_vendor:
   js_node_modules:
