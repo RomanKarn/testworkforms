@@ -1,36 +1,52 @@
-# Базовый образ PHP с Apache
+# Используем multi-stage: собираем node_modules и composer vendor, затем копируем в финальный php-apache образ
+
+# --- node stage (если есть package.json)
+FROM node:18 AS node_builder
+WORKDIR /app
+
+# Копируем весь код (нужно для сборки фронтенда, если есть)
+COPY . .
+# Выполните сборку фронтенда, если есть скрипт
+RUN if [ -f package.json ] && grep -q "\"build\"" package.json 2>/dev/null; then npm run build || true; fi
+
+
+# --- composer stage (если есть composer.json)
+FROM composer:2 AS composer_builder
+WORKDIR /app
+# Копируем composer файлы и дёргаем vendor
+COPY composer.json composer.lock* ./
+RUN if [ -f composer.json ]; then composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader; fi
+
+# Копируем весь проект (нужно чтобы vendor попал рядом с остальным кодом)
+COPY . .
+
+# Забираем node_modules из node_builder (если были)
+COPY --from=node_builder /app/node_modules ./node_modules
+
+
+# --- финальный php/apache образ
 FROM php:8.1-apache
+WORKDIR /var/www/html
 
-# Установка системных зависимостей
-RUN apt-get update && apt-get install -y \
-    curl \
-    gnupg \
-    git \
-    unzip \
-    libzip-dev \
-    && docker-php-ext-install zip \
-    && rm -rf /var/lib/apt/lists/* \
-         && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
-         && apt-get install -y --no-install-recommends nodejs \
-         && rm -rf /var/lib/apt/lists/*
+# системные зависимости (подкорректируйте, если не нужно)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    zip unzip git libzip-dev \
+ && docker-php-ext-install pdo pdo_mysql zip \
+ && rm -rf /var/lib/apt/lists/*
 
-RUN a2enmod rewrite
+# Копируем приложение из composer_builder (уже с vendor/node_modules)
+COPY --from=composer_builder /app /var/www/html
 
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+# Копируем entrypoint для динамической подстройки порта Apache
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-WORKDIR /var/www
+# Права
+RUN chown -R www-data:www-data /var/www/html
 
-COPY . /var/www
-
-COPY ./package*.json /var/www/html/
-
-RUN composer install --no-dev --optimize-autoloader
-
-RUN npm install
-
-COPY ./apache.conf /etc/apache2/sites-available/000-default.conf
-
-RUN chown -R www-data:www-data /var/www \
-    && chmod -R 755 /var/www
+# Если ваше приложение ожидает порт в переменной PORT — обеспечим дефолт
+ENV PORT 80
 
 EXPOSE 80
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["apache2-foreground"]
