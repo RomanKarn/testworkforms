@@ -4,8 +4,6 @@
 FROM node:18 AS node_builder
 WORKDIR /app
 
-COPY ./project/package*.json ./
-RUN if [ -f package.json ]; then npm ci --silent --no-audit --no-fund; fi
 # Копируем весь код (нужно для сборки фронтенда, если есть)
 COPY . .
 # Выполните сборку фронтенда, если есть скрипт
