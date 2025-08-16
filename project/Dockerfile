@@ -4,9 +4,12 @@
 FROM node:18 AS node_builder
 WORKDIR /app
 
+COPY ./project/package*.json ./
+RUN if [ -f package.json ]; then npm ci --silent --no-audit --no-fund; fi
 # Копируем весь код (нужно для сборки фронтенда, если есть)
 COPY . .
 # Выполните сборку фронтенда, если есть скрипт
+
 RUN if [ -f package.json ] && grep -q "\"build\"" package.json 2>/dev/null; then npm run build || true; fi
 
 
@@ -14,7 +17,7 @@ RUN if [ -f package.json ] && grep -q "\"build\"" package.json 2>/dev/null; then
 FROM composer:2 AS composer_builder
 WORKDIR /app
 # Копируем composer файлы и дёргаем vendor
-COPY composer.json composer.lock* ./
+COPY ./project/composer.json composer.lock* ./
 RUN if [ -f composer.json ]; then composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader; fi
 
 # Копируем весь проект (нужно чтобы vendor попал рядом с остальным кодом)
