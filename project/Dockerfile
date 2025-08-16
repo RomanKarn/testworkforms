@@ -38,7 +38,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=composer_builder /app /var/www/html
 
 # Копируем entrypoint для динамической подстройки порта Apache
-COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY ./project/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 # Права
