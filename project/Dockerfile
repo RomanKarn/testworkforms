@@ -11,7 +11,7 @@ FROM composer:2 AS composer_builder
 WORKDIR /app
 
 # сначала composer-зависимости (копируем только composer файлы для кеширования)
-COPY composer.json composer.lock* ./
+COPY ./project/composer.json composer.lock* ./
 RUN if [ -f composer.json ]; then composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader; fi
 
 # теперь копируем весь проект в /app
