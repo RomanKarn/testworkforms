@@ -15,7 +15,7 @@ COPY ./project/composer.json composer.lock* ./
 RUN if [ -f composer.json ]; then composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader; fi
 
 # теперь копируем весь проект в /app
-COPY . .
+COPY ./project/ .
 
 # скопируем результаты сборки фронта из node_builder (если есть) в /app_node
 COPY --from=node_builder /app /app_node
