@@ -1,7 +1,10 @@
 {
-  "name": "php-js-project",
+  "name": "my-app",
   "version": "1.0.0",
+  "scripts": {
+    "build": "echo 'Build completed'"
+  },
   "dependencies": {
-    "jquery": "^3.6.4"
+    "jquery": "^3.6.0"
   }
 }

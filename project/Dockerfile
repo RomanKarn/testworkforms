@@ -1,54 +1,50 @@
-# Stage 1: node build (если есть)
+# Фаза сборки Node.js приложения
 FROM node:18 AS node_builder
 WORKDIR /app
-# копируем package*.json и весь проект (контекст должен быть project/)
-COPY . .
-# если есть package.json и есть скрипт build — выполнится
-RUN if [ -f package.json ] && grep -q "\"build\"" package.json 2>/dev/null; then npm ci --silent --no-audit --no-fund && npm run build || true; fi
 
-# Stage 2: composer (php deps)
+# Копируем зависимости Node.js
+COPY ./package.json ./package-lock.json* ./
+
+# Устанавливаем зависимости и собираем проект (если есть скрипт build)
+RUN apt-get update && apt-get install -y && \
+    npm install && npm update \
+    npm run build
+
+# Фаза сборки PHP зависимостей
 FROM composer:2 AS composer_builder
 WORKDIR /app
 
-# сначала composer-зависимости (копируем только composer файлы для кеширования)
-COPY ./project/composer.json composer.lock* ./
-RUN if [ -f composer.json ]; then composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader; fi
+# Копируем PHP зависимости
+COPY ./composer.json ./composer.lock* ./
 
-# теперь копируем весь проект в /app
-COPY ./project/ .
+# Устанавливаем Composer зависимости
+RUN composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader;
 
-# скопируем результаты сборки фронта из node_builder (если есть) в /app_node
-COPY --from=node_builder /app /app_node
+# Копируем весь PHP проект
+COPY . .
 
-# если в node_builder есть build или dist — переместим в /app/public (если нужно)
-RUN if [ -d /app_node/build ]; then mkdir -p /app/public && cp -r /app_node/build/* /app/public/ || true; fi \
- && if [ -d /app_node/dist ]; then mkdir -p /app/public && cp -r /app_node/dist/* /app/public/ || true; fi
-
-# Stage 3: final php/apache image
+# Финальный образ с Apache
 FROM php:8.1-apache
 WORKDIR /var/www/html
 
-# системные зависимости — подкорректируйте по необходимости
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    zip unzip git libzip-dev \
- && docker-php-ext-install pdo pdo_mysql zip \
- && rm -rf /var/lib/apt/lists/*
+# Устанавливаем системные зависимости
+RUN apt-get update && apt-get install -y \
+    zip unzip git libzip-dev libpng-dev && \
+    docker-php-ext-install pdo pdo_mysql zip gd && \
+    rm -rf /var/lib/apt/lists/*
 
-# Копируем приложение (включая vendor и public)
+# Копируем Apache конфигурацию
+COPY ./apache.conf /etc/apache2/sites-available/000-default.conf
+
+# Включаем необходимые модули Apache
+RUN a2enmod rewrite headers
+
+# Копируем приложение из фазы Composer
 COPY --from=composer_builder /app /var/www/html
 
-# Копируем entrypoint
-COPY ./project/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-
-# Включаем mod_rewrite (часто нужно)
-RUN a2enmod rewrite
-
-# Права
-RUN chown -R www-data:www-data /var/www/html
-
-ENV PORT 80
+# Настраиваем права
+RUN chown -R www-data:www-data /var/www/html && \
+    chmod -R 755 /var/www/html/public
 
 EXPOSE 80
-ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["apache2-foreground"]
